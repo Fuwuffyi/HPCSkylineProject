@@ -1,7 +1,14 @@
+## Targets
+##
+## make: 			Builds all targets.
+## make serial: 	Builds the code using single threaded OpenMP
+## make omp:		Builds the code using OpenMP
+## make cuda:		Builds the code using Cuda
+
 CC := gcc
 NVCC := nvcc
 
-CFLAGS := -std=c99 -Wall -Wpedantic -O2 -D_XOPEN_SOURCE=600
+CFLAGS := -std=c99 -Wall -Wpedantic -O2
 NVCFLAGS := -Wno-deprecated-gpu-targets
 LDLIBS := -lm
 NVLDLIBS := -lm
