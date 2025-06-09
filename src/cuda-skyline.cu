@@ -8,47 +8,46 @@
 
 #include "hpc.h"
 
+/**
+ * Point data structure.
+ */
 typedef struct {
-   float *P; /* coordinates P[i][j] of point i               */
-   int N;    /* Number of points (rows of matrix P)          */
-   int D;    /* Number of dimensions (columns of matrix P)   */
+   float *P;       /* pointer to flat array of coordinates (size N * D) */
+   unsigned int N; /* number of points */
+   unsigned int D; /* dimension of all points */
 } points_t;
 
 /**
- * Read input from stdin. Input format is:
- *
- * d [other ignored stuff]
- * N
- * p0,0 p0,1 ... p0,d-1
- * p1,0 p1,1 ... p1,d-1
- * ...
- * pn-1,0 pn-1,1 ... pn-1,d-1
- *
+ * Read dimension, number of points, and coordinates from stdin.
  */
 void read_input(points_t *points) {
    char buf[1024];
-   int N, D;
+   unsigned int N, D;
    float *P;
-
-   if (1 != scanf("%d", &D)) {
+   // Read the dimension
+   if (1 != scanf("%u", &D)) {
       fprintf(stderr, "FATAL: can not read the dimension\n");
       exit(EXIT_FAILURE);
    }
    assert(D >= 2);
-   if (NULL == fgets(buf, sizeof(buf), stdin)) { /* ignore rest of the line */
+   // Skip rest of line
+   if (NULL == fgets(buf, sizeof(buf), stdin)) {
       fprintf(stderr, "FATAL: can not read the first line\n");
       exit(EXIT_FAILURE);
    }
-   if (1 != scanf("%d", &N)) {
+   // Read point count
+   if (1 != scanf("%u", &N)) {
       fprintf(stderr, "FATAL: can not read the number of points\n");
       exit(EXIT_FAILURE);
    }
+   // Allocate point array
    P = (float *)malloc(D * N * sizeof(*P));
    assert(P);
-   for (int i = 0; i < N; ++i) {
-      for (int k = 0; k < D; ++k) {
+   // Read all points
+   for (unsigned int i = 0; i < N; ++i) {
+      for (unsigned int k = 0; k < D; ++k) {
          if (1 != scanf("%f", &(P[i * D + k]))) {
-            fprintf(stderr, "FATAL: failed to get coordinate %d of point %d\n", k, i);
+            fprintf(stderr, "FATAL: failed to get coordinate %u of point %u\n", k, i);
             exit(EXIT_FAILURE);
          }
       }
@@ -58,16 +57,23 @@ void read_input(points_t *points) {
    points->D = D;
 }
 
+/**
+ * Frees points memory.
+ */
 void free_points(points_t *points) {
    free(points->P);
    points->P = NULL;
-   points->N = points->D = -1;
+   points->N = points->D = 0;
 }
 
-/* Returns 1 iff |p| dominates |q| */
-__device__ char dominates(const float *p, const float *q, const int D) {
+/**
+ * Check if point p dominates point q in all dimensions.
+ * Returns 1 if p >= q in every coordinate and p > q in at least one.
+ * Returns 0 otherwise.
+ */
+__device__ char dominates(const float *p, const float *q, const unsigned int D) {
    char strictly_greater = 0;
-   for (int k = 0; k < D; ++k) {
+   for (unsigned int k = 0; k < D; ++k) {
       if (p[k] < q[k]) return 0;
       strictly_greater |= (p[k] > q[k]);
    }
@@ -75,17 +81,16 @@ __device__ char dominates(const float *p, const float *q, const int D) {
 }
 
 /**
- * Compute the skyline of `points`. At the end, `s[i] == 1` iff point
- * `i` belongs to the skyline. The function returns the number `r` of
- * points that belongs to the skyline. The caller is responsible for
- * allocating the array `s` of length at least `points->N`.
+ * Compute the skyline of a set of points.
+ * Uses an array of flags (size N) marking whether each point remains in the skyline (1 = in, 0 = out)
+ * Returns the number of skyline points.
  */
-__global__ void skyline(const float *points_data, char *flags, const int N, const int D) {
-   int i = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void skyline(const float *points_data, char *flags, const unsigned int N, const unsigned int D) {
+   const unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
    if (i >= N) return;
    if (!flags[i]) return;
    const float *pi = points_data + i * D;
-   for (int j = 0; j < N; ++j) {
+   for (unsigned int j = 0; j < N; ++j) {
       if (!flags[j]) continue;
       const float *pj = points_data + j * D;
       if (dominates(pi, pj, D)) {
@@ -95,25 +100,23 @@ __global__ void skyline(const float *points_data, char *flags, const int N, cons
 }
 
 /**
- * Print the coordinates of points belonging to the skyline `s` to
- * standard ouptut. `s[i] == 1` iff point `i` belongs to the skyline.
- * The output format is the same as the input format, so that this
- * program can process its own output.
+ * Output the skyline to stdout in the expected format.
+ * First prints D, then r (number of skyline points), then each skyline point.
  */
-void print_skyline(const points_t *points, const char *s, int r) {
-   const int D = points->D;
-   const int N = points->N;
+void print_skyline(const points_t *points, const char *skyline_flags, const unsigned int r) {
+   const unsigned int D = points->D;
+   const unsigned int N = points->N;
    const float *P = points->P;
-
-   printf("%d\n", D);
-   printf("%d\n", r);
-   for (int i = 0; i < N; ++i) {
-      if (s[i]) {
-         for (int k = 0; k < D; ++k) {
-            printf("%f ", P[i * D + k]);
-         }
-         printf("\n");
+   // Print dimension and skyline size
+   printf("%u\n", D);
+   printf("%u\n", r);
+   // Print each skyline point's coordinates
+   for (unsigned int i = 0; i < N; ++i) {
+      if (!skyline_flags[i]) continue;
+      for (unsigned int k = 0; k < D; ++k) {
+         printf("%f ", P[i * D + k]);
       }
+      printf("\n");
    }
 }
 
@@ -125,8 +128,8 @@ int main(int argc, char *argv[]) {
    }
    // Read in data
    read_input(&points);
-   const int N = points.N;
-   const int D = points.D;
+   const unsigned int N = points.N;
+   const unsigned int D = points.D;
    const size_t point_bytes = (size_t)N * D * sizeof(float);
    const size_t flag_bytes = (size_t)N * sizeof(char);
    // Allocate local flags
@@ -139,13 +142,13 @@ int main(int argc, char *argv[]) {
    cudaSafeCall(cudaMalloc(&d_flags, flag_bytes));
    cudaSafeCall(cudaMemcpy(d_P, points.P, point_bytes, cudaMemcpyHostToDevice));
    // Calculate blocks
-   const int threads_per_block = 256;
-   const int total = N * N;
-   const int blocks = (total + threads_per_block - 1) / threads_per_block;
+   const unsigned int threads_per_block = 256;
+   const unsigned int total = N * N;
+   const unsigned int blocks = (total + threads_per_block - 1) / threads_per_block;
    // Run the skyline algorithm
    const double tstart = hpc_gettime();
    // TODO: Implement this within the kernel?
-   for (int i = 0; i < N; ++i) {
+   for (unsigned int i = 0; i < N; ++i) {
       h_flags[i] = 1;
    }
    cudaSafeCall(cudaMemcpy(d_flags, h_flags, flag_bytes, cudaMemcpyHostToDevice));
@@ -154,8 +157,8 @@ int main(int argc, char *argv[]) {
    // Copy data from host
    cudaSafeCall(cudaMemcpy(h_flags, d_flags, flag_bytes, cudaMemcpyDeviceToHost));
    // TODO: Implement this within the kernel?
-   int r = 0;
-   for (int i = 0; i < N; ++i) {
+   unsigned int r = 0;
+   for (unsigned int i = 0; i < N; ++i) {
       if (h_flags[i] == 1) {
          ++r;
       }
@@ -163,9 +166,9 @@ int main(int argc, char *argv[]) {
    const double elapsed = hpc_gettime() - tstart;
    // Print results
    print_skyline(&points, h_flags, r);
-   fprintf(stderr, "\n\t%d points\n", points.N);
-   fprintf(stderr, "\t%d dimensions\n", points.D);
-   fprintf(stderr, "\t%d points in skyline\n\n", r);
+   fprintf(stderr, "\n\t%u points\n", points.N);
+   fprintf(stderr, "\t%u dimensions\n", points.D);
+   fprintf(stderr, "\t%u points in skyline\n\n", r);
    fprintf(stderr, "Execution time (s) %f\n", elapsed);
    // Free and exit
    free_points(&points);
