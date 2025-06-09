@@ -99,7 +99,7 @@ unsigned int skyline(const points_t *points, char *skyline_flags) {
    for (unsigned int i = 0; i < N; ++i) {
       if (!skyline_flags[i]) continue;
       // Compare against all others (in parallel)
-#pragma omp parallel for default(none) shared(skyline_flags, D, N, P, i) schedule(dynamic, 256) reduction(- : r)
+#pragma omp parallel for default(none) shared(skyline_flags, D, N, P, i) schedule(guided, 256) reduction(- : r)
       for (unsigned int j = 0; j < N; ++j) {
          // If point i dominates point j, then point j is removed from the skyline
          if (skyline_flags[j] && dominates(&(P[i * D]), &(P[j * D]), D)) {
