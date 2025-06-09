@@ -1,0 +1,5 @@
+/src/*.o
+/src/*.exe
+/src/serial
+/src/omp
+/src/cuda
