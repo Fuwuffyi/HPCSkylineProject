@@ -82,19 +82,19 @@ __device__ char dominates(const float *p, const float *q, const unsigned int D) 
 
 /**
  * Compute the skyline of a set of points.
- * Uses an array of flags (size N) marking whether each point remains in the skyline (1 = in, 0 = out)
+ * Uses an array of skyline_flags (size N) marking whether each point remains in the skyline (1 = in, 0 = out)
  * Returns the number of skyline points.
  */
-__global__ void skyline(const float *points_data, char *flags, const unsigned int N, const unsigned int D) {
+__global__ void skyline(const float *points_data, char *skyline_flags, const unsigned int N, const unsigned int D) {
    const unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
    if (i >= N) return;
-   if (!flags[i]) return;
+   if (!skyline_flags[i]) return;
    const float *pi = points_data + i * D;
    for (unsigned int j = 0; j < N; ++j) {
-      if (!flags[j]) continue;
+      if (!skyline_flags[j]) continue;
       const float *pj = points_data + j * D;
       if (dominates(pi, pj, D)) {
-         flags[j] = 0;
+         skyline_flags[j] = 0;
       }
    }
 }
@@ -133,13 +133,13 @@ int main(int argc, char *argv[]) {
    const size_t point_bytes = (size_t)N * D * sizeof(float);
    const size_t flag_bytes = (size_t)N * sizeof(char);
    // Allocate local flags
-   char *h_flags = (char *)malloc(points.N * sizeof(*h_flags));
-   assert(h_flags);
+   char *h_skyline_flags = (char *)malloc(points.N * sizeof(*h_skyline_flags));
+   assert(h_skyline_flags);
    // Allocate data on the gpu
    float *d_P;
-   char *d_flags;
+   char *d_skyline_flags;
    cudaSafeCall(cudaMalloc(&d_P, point_bytes));
-   cudaSafeCall(cudaMalloc(&d_flags, flag_bytes));
+   cudaSafeCall(cudaMalloc(&d_skyline_flags, flag_bytes));
    cudaSafeCall(cudaMemcpy(d_P, points.P, point_bytes, cudaMemcpyHostToDevice));
    // Calculate blocks
    const unsigned int threads_per_block = 256;
@@ -149,29 +149,31 @@ int main(int argc, char *argv[]) {
    const double tstart = hpc_gettime();
    // TODO: Implement this within the kernel?
    for (unsigned int i = 0; i < N; ++i) {
-      h_flags[i] = 1;
+      h_skyline_flags[i] = 1;
    }
-   cudaSafeCall(cudaMemcpy(d_flags, h_flags, flag_bytes, cudaMemcpyHostToDevice));
-   skyline<<<blocks, threads_per_block>>>(d_P, d_flags, N, D);
+   cudaSafeCall(cudaMemcpy(d_skyline_flags, h_skyline_flags, flag_bytes, cudaMemcpyHostToDevice));
+   skyline<<<blocks, threads_per_block>>>(d_P, d_skyline_flags, N, D);
    cudaSafeCall(cudaDeviceSynchronize());
    // Copy data from host
-   cudaSafeCall(cudaMemcpy(h_flags, d_flags, flag_bytes, cudaMemcpyDeviceToHost));
+   cudaSafeCall(cudaMemcpy(h_skyline_flags, d_skyline_flags, flag_bytes, cudaMemcpyDeviceToHost));
    // TODO: Implement this within the kernel?
    unsigned int r = 0;
    for (unsigned int i = 0; i < N; ++i) {
-      if (h_flags[i] == 1) {
+      if (h_skyline_flags[i] == 1) {
          ++r;
       }
    }
    const double elapsed = hpc_gettime() - tstart;
    // Print results
-   print_skyline(&points, h_flags, r);
+   print_skyline(&points, h_skyline_flags, r);
    fprintf(stderr, "\n\t%u points\n", points.N);
    fprintf(stderr, "\t%u dimensions\n", points.D);
    fprintf(stderr, "\t%u points in skyline\n\n", r);
    fprintf(stderr, "Execution time (s) %f\n", elapsed);
    // Free and exit
    free_points(&points);
-   free(h_flags);
+   cudaSafeCall(cudaFree(d_P));
+   free(h_skyline_flags);
+   cudaSafeCall(cudaFree(d_skyline_flags));
    return EXIT_SUCCESS;
 }
