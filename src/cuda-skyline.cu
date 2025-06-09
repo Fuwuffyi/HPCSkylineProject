@@ -80,18 +80,16 @@ char dominates(const float *p, const float *q, int D) {
  * points that belongs to the skyline. The caller is responsible for
  * allocating the array `s` of length at least `points->N`.
  */
-int skyline(const points_t *points, int *s) {
+int skyline(const points_t *points, char *s) {
    const int D = points->D;
    const int N = points->N;
    const float *P = points->P;
    int r = N;
-#pragma omp parallel for default(none) shared(s, N) schedule(static)
    for (int i = 0; i < N; ++i) {
       s[i] = 1;
    }
    for (int i = 0; i < N; ++i) {
       if (!s[i]) continue;
-#pragma omp parallel for default(none) shared(s, D, N, P, i) schedule(dynamic, 256) reduction(- : r)
       for (int j = 0; j < N; ++j) {
          if (s[j] && dominates(&(P[i * D]), &(P[j * D]), D)) {
             s[j] = 0;
@@ -108,7 +106,7 @@ int skyline(const points_t *points, int *s) {
  * The output format is the same as the input format, so that this
  * program can process its own output.
  */
-void print_skyline(const points_t *points, const int *s, int r) {
+void print_skyline(const points_t *points, const char *s, int r) {
    const int D = points->D;
    const int N = points->N;
    const float *P = points->P;
@@ -127,14 +125,16 @@ void print_skyline(const points_t *points, const int *s, int r) {
 
 int main(int argc, char *argv[]) {
    points_t points;
-
+#ifdef SINGLE_THREAD
+   omp_set_num_threads(1);
+#endif
    if (argc != 1) {
       fprintf(stderr, "Usage: %s < input_file > output_file\n", argv[0]);
       return EXIT_FAILURE;
    }
 
    read_input(&points);
-   int *s = (int *)malloc(points.N * sizeof(*s));
+   char *s = (char *)malloc(points.N * sizeof(*s));
    assert(s);
    const double tstart = hpc_gettime();
    const int r = skyline(&points, s);

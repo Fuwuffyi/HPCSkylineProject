@@ -66,14 +66,31 @@ double hpc_gettime( void )
 #if _XOPEN_SOURCE < 600
 #error You must add "#define _XOPEN_SOURCE 600" at the very beginning of your source program
 #endif
+
+#ifdef _WIN32
+// Windows High-Resolution Timer
+#include <windows.h>
+
+double hpc_gettime( void )
+{
+    LARGE_INTEGER freq, counter;
+    QueryPerformanceFrequency(&freq);
+    QueryPerformanceCounter(&counter);
+    return (double)counter.QuadPart / (double)freq.QuadPart;
+}
+
+#else
+// POSIX clock_gettime
 #include <time.h>
 
 double hpc_gettime( void )
 {
     struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts );
+    clock_gettime(CLOCK_MONOTONIC, &ts);
     return ts.tv_sec + ((double)ts.tv_nsec) / 1.0e9;
 }
+#endif
+
 #endif
 
 #ifdef __CUDACC__

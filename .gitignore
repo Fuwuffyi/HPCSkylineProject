@@ -1,6 +1,8 @@
 # Built targets
 /src/*.o
 /src/*.exe
+/src/*.exp
+/src/*.lib
 /src/serial
 /src/omp
 /src/cuda

@@ -10,8 +10,6 @@ NVCC := nvcc
 
 CFLAGS := -std=c99 -Wall -Wpedantic -O2
 NVCFLAGS := -Wno-deprecated-gpu-targets
-LDLIBS := -lm
-NVLDLIBS := -lm
 
 C_SOURCES := $(wildcard *.c)
 CU_SOURCES := $(wildcard *.cu)
@@ -35,14 +33,14 @@ clean:
 
 serial: CFLAGS += -fopenmp -DSINGLE_THREAD=1
 serial: $(SERIAL_OBJS)
-	$(CC) $(CFLAGS) $(SERIAL_OBJS) -o $@ $(LDLIBS)
+	$(CC) $(CFLAGS) $(SERIAL_OBJS) -o $@
 
 omp: CFLAGS += -fopenmp
 omp: $(OMP_OBJS)
-	$(CC) $(CFLAGS) $(OMP_OBJS) -o $@ $(LDLIBS)
+	$(CC) $(CFLAGS) $(OMP_OBJS) -o $@
 
 cuda: $(CUDA_OBJS)
-	$(NVCC) $(NVCFLAGS) $(CUDA_OBJS) -o $@ $(NVLDLIBS)
+	$(NVCC) $(NVCFLAGS) $(CUDA_OBJS) -o $@
 
 serial-%.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
