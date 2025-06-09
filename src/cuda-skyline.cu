@@ -65,7 +65,7 @@ void free_points(points_t *points) {
 }
 
 /* Returns 1 iff |p| dominates |q| */
-char dominates(const float *p, const float *q, int D) {
+__device__ char dominates(const float *p, const float *q, const int D) {
    char strictly_greater = 0;
    for (int k = 0; k < D; ++k) {
       if (p[k] < q[k]) return 0;
@@ -80,24 +80,18 @@ char dominates(const float *p, const float *q, int D) {
  * points that belongs to the skyline. The caller is responsible for
  * allocating the array `s` of length at least `points->N`.
  */
-int skyline(const points_t *points, char *s) {
-   const int D = points->D;
-   const int N = points->N;
-   const float *P = points->P;
-   int r = N;
-   for (int i = 0; i < N; ++i) {
-      s[i] = 1;
-   }
-   for (int i = 0; i < N; ++i) {
-      if (!s[i]) continue;
-      for (int j = 0; j < N; ++j) {
-         if (s[j] && dominates(&(P[i * D]), &(P[j * D]), D)) {
-            s[j] = 0;
-            --r;
-         }
+__global__ void skyline(const float *points_data, char *flags, const int N, const int D) {
+   int i = blockIdx.x * blockDim.x + threadIdx.x;
+   if (i >= N) return;
+   if (!flags[i]) return;
+   const float *pi = points_data + i * D;
+   for (int j = 0; j < N; ++j) {
+      if (!flags[j]) continue;
+      const float *pj = points_data + j * D;
+      if (dominates(pi, pj, D)) {
+         flags[j] = 0;
       }
    }
-   return r;
 }
 
 /**
@@ -125,28 +119,56 @@ void print_skyline(const points_t *points, const char *s, int r) {
 
 int main(int argc, char *argv[]) {
    points_t points;
-#ifdef SINGLE_THREAD
-   omp_set_num_threads(1);
-#endif
    if (argc != 1) {
       fprintf(stderr, "Usage: %s < input_file > output_file\n", argv[0]);
       return EXIT_FAILURE;
    }
-
+   // Read in data
    read_input(&points);
-   char *s = (char *)malloc(points.N * sizeof(*s));
-   assert(s);
+   const int N = points.N;
+   const int D = points.D;
+   const size_t point_bytes = (size_t)N * D * sizeof(float);
+   const size_t flag_bytes = (size_t)N * sizeof(char);
+   // Allocate local flags
+   char *h_flags = (char *)malloc(points.N * sizeof(*h_flags));
+   assert(h_flags);
+   // Allocate data on the gpu
+   float *d_P;
+   char *d_flags;
+   cudaSafeCall(cudaMalloc(&d_P, point_bytes));
+   cudaSafeCall(cudaMalloc(&d_flags, flag_bytes));
+   cudaSafeCall(cudaMemcpy(d_P, points.P, point_bytes, cudaMemcpyHostToDevice));
+   // Calculate blocks
+   const int threads_per_block = 256;
+   const int total = N * N;
+   const int blocks = (total + threads_per_block - 1) / threads_per_block;
+   // Run the skyline algorithm
    const double tstart = hpc_gettime();
-   const int r = skyline(&points, s);
+   // TODO: Implement this within the kernel?
+   for (int i = 0; i < N; ++i) {
+      h_flags[i] = 1;
+   }
+   cudaSafeCall(cudaMemcpy(d_flags, h_flags, flag_bytes, cudaMemcpyHostToDevice));
+   skyline<<<blocks, threads_per_block>>>(d_P, d_flags, N, D);
+   cudaSafeCall(cudaDeviceSynchronize());
+   // Copy data from host
+   cudaSafeCall(cudaMemcpy(h_flags, d_flags, flag_bytes, cudaMemcpyDeviceToHost));
+   // TODO: Implement this within the kernel?
+   int r = 0;
+   for (int i = 0; i < N; ++i) {
+      if (h_flags[i] == 1) {
+         ++r;
+      }
+   }
    const double elapsed = hpc_gettime() - tstart;
-   print_skyline(&points, s, r);
-
+   // Print results
+   print_skyline(&points, h_flags, r);
    fprintf(stderr, "\n\t%d points\n", points.N);
    fprintf(stderr, "\t%d dimensions\n", points.D);
    fprintf(stderr, "\t%d points in skyline\n\n", r);
    fprintf(stderr, "Execution time (s) %f\n", elapsed);
-
+   // Free and exit
    free_points(&points);
-   free(s);
+   free(h_flags);
    return EXIT_SUCCESS;
 }
