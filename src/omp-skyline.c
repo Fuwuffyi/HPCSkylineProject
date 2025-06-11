@@ -91,20 +91,23 @@ unsigned int skyline(const points_t *points, char *skyline_flags) {
    const float *P = points->P;
    unsigned int r = N;
    // Initialize all flags to be in skyline
-#pragma omp parallel for default(none) shared(skyline_flags, N) schedule(static)
-   for (unsigned int i = 0; i < N; ++i) {
-      skyline_flags[i] = 1;
-   }
-   // For each point
-   for (unsigned int i = 0; i < N; ++i) {
-      if (!skyline_flags[i]) continue;
-      // Compare against all others (in parallel)
-#pragma omp parallel for default(none) shared(skyline_flags, D, N, P, i) schedule(guided, 256) reduction(- : r)
-      for (unsigned int j = 0; j < N; ++j) {
-         // If point i dominates point j, then point j is removed from the skyline
-         if (skyline_flags[j] && dominates(&(P[i * D]), &(P[j * D]), D)) {
-            skyline_flags[j] = 0;
-            --r;
+#pragma omp parallel default(none) shared(skyline_flags, D, N, P) reduction(- : r)
+   {
+#pragma omp for schedule(static)
+      for (unsigned int i = 0; i < N; ++i) {
+         skyline_flags[i] = 1;
+      }
+      // For each point
+      for (unsigned int i = 0; i < N; ++i) {
+         if (!skyline_flags[i]) continue;
+         // Compare against all others (in parallel)
+#pragma omp for schedule(guided, 256)
+         for (unsigned int j = 0; j < N; ++j) {
+            // If point i dominates point j, then point j is removed from the skyline
+            if (skyline_flags[j] && dominates(&(P[i * D]), &(P[j * D]), D)) {
+               skyline_flags[j] = 0;
+               --r;
+            }
          }
       }
    }

@@ -9,7 +9,7 @@ CC := gcc
 NVCC := nvcc
 
 CFLAGS := -std=c99 -Wall -Wpedantic -O2
-NVCFLAGS := -Wno-deprecated-gpu-targets
+NVCFLAGS := -Wno-deprecated-gpu-targets -O2
 
 C_SOURCES := $(wildcard *.c)
 CU_SOURCES := $(wildcard *.cu)
