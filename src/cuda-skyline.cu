@@ -92,8 +92,9 @@ __global__ void skyline(const float *points_data, char *skyline_flags, const uns
    for (unsigned int j = 0; j < N; ++j) {
       if (!skyline_flags[j]) continue;
       const float *pj = points_data + j * D;
-      if (dominates(pi, pj, D)) {
-         skyline_flags[j] = 0;
+      if (dominates(pj, pi, D)) {
+         skyline_flags[i] = 0;
+         return;
       }
    }
 }
