@@ -71,7 +71,7 @@ void free_points(points_t *points) {
  * Returns 1 if p >= q in every coordinate and p > q in at least one.
  * Returns 0 otherwise.
  */
-char dominates(const float *p, const float *q, const unsigned int D) {
+inline char dominates(const float *p, const float *q, const unsigned int D) {
    char strictly_greater = 0;
    for (unsigned int k = 0; k < D; ++k) {
       if (p[k] < q[k]) return 0;
