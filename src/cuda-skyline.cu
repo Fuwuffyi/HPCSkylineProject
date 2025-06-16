@@ -88,7 +88,6 @@ __device__ char dominates(const float *p, const float *q, const unsigned int D) 
 __global__ void skyline(const float *points_data, char *skyline_flags, const unsigned int N, const unsigned int D) {
    const unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
    if (i >= N) return;
-   if (!skyline_flags[i]) return;
    const float *pi = points_data + i * D;
    for (unsigned int j = 0; j < N; ++j) {
       if (!skyline_flags[j]) continue;
@@ -143,15 +142,10 @@ int main(int argc, char *argv[]) {
    cudaSafeCall(cudaMemcpy(d_P, points.P, point_bytes, cudaMemcpyHostToDevice));
    // Calculate blocks
    const unsigned int threads_per_block = 256;
-   const unsigned int total = N * N;
-   const unsigned int blocks = (total + threads_per_block - 1) / threads_per_block;
+   const unsigned int blocks = (N + threads_per_block - 1) / threads_per_block;
    // Run the skyline algorithm
    const double tstart = hpc_gettime();
-   // TODO: Implement this within the kernel?
-   for (unsigned int i = 0; i < N; ++i) {
-      h_skyline_flags[i] = 1;
-   }
-   cudaSafeCall(cudaMemcpy(d_skyline_flags, h_skyline_flags, flag_bytes, cudaMemcpyHostToDevice));
+   cudaSafeCall(cudaMemset(d_skyline_flags, 1, flag_bytes));
    skyline<<<blocks, threads_per_block>>>(d_P, d_skyline_flags, N, D);
    cudaSafeCall(cudaDeviceSynchronize());
    // Copy data from host
