@@ -95,9 +95,10 @@ unsigned int skyline(const points_t *points, char *skyline_flags) {
    const unsigned int N = points->N;
    const float *P = points->P;
    unsigned int r = N;
-   // Initialize all flags to be in skyline
+   // Create threads here to reduce the reduction overhead
 #pragma omp parallel default(none) shared(skyline_flags, D, N, P) reduction(- : r)
    {
+   // Initialize all flags to be in skyline
 #pragma omp for schedule(static)
       for (unsigned int i = 0; i < N; ++i) {
          skyline_flags[i] = 1;
@@ -105,7 +106,7 @@ unsigned int skyline(const points_t *points, char *skyline_flags) {
       // For each point
       for (unsigned int i = 0; i < N; ++i) {
          if (!skyline_flags[i]) continue;
-         // Compare against all others (in parallel)
+         // Compare against all others
 #pragma omp for schedule(guided, 256)
          for (unsigned int j = 0; j < N; ++j) {
             // If point i dominates point j, then point j is removed from the skyline
