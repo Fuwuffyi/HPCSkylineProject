@@ -1,3 +1,8 @@
+/**
+ * Cognome e nome:   Palazzini Luca
+ * Codice matricola: 0001070910
+ */
+
 #if _XOPEN_SOURCE < 600
 #define _XOPEN_SOURCE 600
 #endif

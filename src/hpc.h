@@ -1,3 +1,8 @@
+/**
+ * Cognome e nome:   Palazzini Luca
+ * Codice matricola: 0001070910
+ */
+
 /****************************************************************************
  *
  * hpc.h - Miscellaneous utility functions for the HPC course

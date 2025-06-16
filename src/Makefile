@@ -1,3 +1,6 @@
+## Cognome e nome:  	Palazzini Luca
+## Codice matricola: 0001070910
+
 ## Targets
 ##
 ## make: 			Builds all targets.
