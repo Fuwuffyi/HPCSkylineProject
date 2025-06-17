@@ -13,6 +13,8 @@
 
 #include "hpc.h"
 
+#define BLKDIM 512
+
 /**
  * Point data structure.
  */
@@ -104,6 +106,27 @@ __global__ void skyline(const float *points_data, char *skyline_flags, const uns
    }
 }
 
+__global__ void countReduction(char *skyline_flags, unsigned int *r, const unsigned int N) {
+   __shared__ unsigned int temp[BLKDIM];
+   const unsigned int lindex = threadIdx.x;
+   unsigned int bsize = blockDim.x / 2;
+   temp[lindex] = 0;
+   for (unsigned int i = lindex; i < N; i += blockDim.x) {
+      temp[lindex] += skyline_flags[i];
+   }
+   __syncthreads();
+   while (bsize > 0) {
+      if (lindex < bsize) {
+         temp[lindex] += temp[lindex + bsize];
+      }
+      bsize = bsize / 2;
+      __syncthreads();
+   }
+   if (lindex == 0) {
+      *r = temp[0];
+   }
+}
+
 /**
  * Output the skyline to stdout in the expected format.
  * First prints D, then r (number of skyline points), then each skyline point.
@@ -140,35 +163,34 @@ int main(int argc, char *argv[]) {
    // Allocate local flags
    char *h_skyline_flags = (char *)malloc(points.N * sizeof(*h_skyline_flags));
    assert(h_skyline_flags);
+   unsigned int h_r = 0;
    // Allocate data on the gpu
    float *d_P;
    char *d_skyline_flags;
+   unsigned int *d_r;
    cudaSafeCall(cudaMalloc(&d_P, point_bytes));
    cudaSafeCall(cudaMalloc(&d_skyline_flags, flag_bytes));
+   cudaSafeCall(cudaMalloc(&d_r, sizeof(unsigned int)));
+   cudaSafeCall(cudaMemcpy(d_r, &h_r, sizeof(unsigned int), cudaMemcpyHostToDevice));
    cudaSafeCall(cudaMemcpy(d_P, points.P, point_bytes, cudaMemcpyHostToDevice));
    // Calculate blocks
-   const unsigned int threads_per_block = 256;
-   const unsigned int blocks = (N + threads_per_block - 1) / threads_per_block;
+   const unsigned int blocks = (N + BLKDIM - 1) / BLKDIM;
    // Run the skyline algorithm
    const double tstart = hpc_gettime();
    cudaSafeCall(cudaMemset(d_skyline_flags, 1, flag_bytes));
-   skyline<<<blocks, threads_per_block>>>(d_P, d_skyline_flags, N, D);
+   skyline<<<blocks, BLKDIM>>>(d_P, d_skyline_flags, N, D);
+   // Reduction to get r count
+   countReduction<<<blocks, BLKDIM>>>(d_skyline_flags, d_r, N);
    cudaSafeCall(cudaDeviceSynchronize());
    // Copy data from host
    cudaSafeCall(cudaMemcpy(h_skyline_flags, d_skyline_flags, flag_bytes, cudaMemcpyDeviceToHost));
-   // TODO: Implement this within the kernel?
-   unsigned int r = 0;
-   for (unsigned int i = 0; i < N; ++i) {
-      if (h_skyline_flags[i] == 1) {
-         ++r;
-      }
-   }
+   cudaSafeCall(cudaMemcpy(&h_r, d_r, sizeof(unsigned int), cudaMemcpyDeviceToHost));
    const double elapsed = hpc_gettime() - tstart;
    // Print results
-   print_skyline(&points, h_skyline_flags, r);
+   print_skyline(&points, h_skyline_flags, h_r);
    fprintf(stderr, "\n\t%u points\n", points.N);
    fprintf(stderr, "\t%u dimensions\n", points.D);
-   fprintf(stderr, "\t%u points in skyline\n\n", r);
+   fprintf(stderr, "\t%u points in skyline\n\n", h_r);
    fprintf(stderr, "Execution time (s) %f\n", elapsed);
    // Free and exit
    free_points(&points);
