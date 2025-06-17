@@ -105,7 +105,7 @@ unsigned int skyline(const points_t *points, char *skyline_flags) {
       for (unsigned int i = 0; i < N; ++i) {
          if (!skyline_flags[i]) continue;
          // Compare against all others
-#pragma omp for schedule(guided, 256)
+#pragma omp for schedule(dynamic, 256)
          for (unsigned int j = 0; j < N; ++j) {
             // If point i dominates point j, then point j is removed from the skyline
             if (skyline_flags[j] && dominates(&(P[i * D]), &(P[j * D]), D)) {
