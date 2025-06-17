@@ -109,11 +109,9 @@ __global__ void skyline(const float *points_data, char *skyline_flags, const uns
 __global__ void countReduction(char *skyline_flags, unsigned int *r, const unsigned int N) {
    __shared__ unsigned int temp[BLKDIM];
    const unsigned int lindex = threadIdx.x;
+   const unsigned int gindex = threadIdx.x + blockIdx.x * blockDim.x;
    unsigned int bsize = blockDim.x / 2;
-   temp[lindex] = 0;
-   for (unsigned int i = lindex; i < N; i += blockDim.x) {
-      temp[lindex] += skyline_flags[i];
-   }
+   temp[lindex] = skyline_flags[gindex];
    __syncthreads();
    while (bsize > 0) {
       if (lindex < bsize) {
@@ -123,7 +121,7 @@ __global__ void countReduction(char *skyline_flags, unsigned int *r, const unsig
       __syncthreads();
    }
    if (lindex == 0) {
-      *r = temp[0];
+      atomicAdd(r, temp[0]);
    }
 }
 
