@@ -7,6 +7,7 @@
 #define _XOPEN_SOURCE 600
 #endif
 
+#include <string.h>
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -95,14 +96,11 @@ unsigned int skyline(const points_t *points, char *skyline_flags) {
    const unsigned int N = points->N;
    const float *P = points->P;
    unsigned int r = N;
+   // Initialize all flags to be in skyline
+   memset(skyline_flags, 1, N * sizeof(char));
    // Create threads here to reduce the reduction overhead
 #pragma omp parallel default(none) shared(skyline_flags, D, N, P) reduction(- : r)
    {
-   // Initialize all flags to be in skyline
-#pragma omp for schedule(static)
-      for (unsigned int i = 0; i < N; ++i) {
-         skyline_flags[i] = 1;
-      }
       // For each point
       for (unsigned int i = 0; i < N; ++i) {
          if (!skyline_flags[i]) continue;
