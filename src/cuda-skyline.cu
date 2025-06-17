@@ -196,6 +196,7 @@ int main(int argc, char *argv[]) {
    fprintf(stderr, "\t%u points in skyline\n\n", h_r);
    fprintf(stderr, "Execution time (s) %f\n", elapsed);
    // Free and exit
+   cudaSafeCall(cudaFree(d_r));
    free_points(&points);
    cudaSafeCall(cudaFree(d_P));
    free(h_skyline_flags);
