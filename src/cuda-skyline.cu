@@ -96,16 +96,21 @@ __global__ void skyline(const float *points_data, char *skyline_flags, const uns
    const unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
    if (i >= N) return;
    const float *pi = points_data + i * D;
+   char in_skyline = 1;
    for (unsigned int j = 0; j < N; ++j) {
       if (!skyline_flags[j]) continue;
       const float *pj = points_data + j * D;
       if (dominates(pj, pi, D)) {
-         skyline_flags[i] = 0;
-         return;
+         in_skyline = 0;
+         break;
       }
    }
+   skyline_flags[i] = in_skyline;
 }
 
+/**
+ * Calculates the amount of points on the skyline using a reduction kernel.
+ */
 __global__ void countReduction(char *skyline_flags, unsigned int *r, const unsigned int N) {
    __shared__ unsigned int temp[BLKDIM];
    const unsigned int lindex = threadIdx.x;
