@@ -111,22 +111,25 @@ __global__ void skyline(const float *points_data, char *skyline_flags, const uns
 /**
  * Calculates the amount of points on the skyline using a reduction kernel.
  */
-__global__ void countReduction(char *skyline_flags, unsigned int *r, const unsigned int N) {
-   __shared__ unsigned int temp[BLKDIM];
-   const unsigned int lindex = threadIdx.x;
-   const unsigned int gindex = threadIdx.x + blockIdx.x * blockDim.x;
-   unsigned int bsize = blockDim.x / 2;
-   temp[lindex] = skyline_flags[gindex];
+__global__ void r_reduction(char *skyline_flags, unsigned int *r, const unsigned int N) {
+   // Setup shared memory
+   __shared__ unsigned int shmem[BLKDIM];
+   // Thread and global indices
+   const unsigned int tid = threadIdx.x;
+   const unsigned int gindex = blockIdx.x * blockDim.x + threadIdx.x;
+   // Setup initial shared memory
+   shmem[tid] = (gindex < N) ? skyline_flags[gindex] : 0;
    __syncthreads();
-   while (bsize > 0) {
-      if (lindex < bsize) {
-         temp[lindex] += temp[lindex + bsize];
+   // Tree reduction
+   for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1) {
+      if (tid < s) {
+         shmem[tid] += shmem[tid + s];
       }
-      bsize = bsize / 2;
       __syncthreads();
    }
-   if (lindex == 0) {
-      atomicAdd(r, temp[0]);
+   // Atomic add block result to global counter
+   if (tid == 0) {
+      atomicAdd(r, shmem[0]);
    }
 }
 
@@ -183,7 +186,7 @@ int main(int argc, char *argv[]) {
    cudaSafeCall(cudaMemset(d_skyline_flags, 1, flag_bytes));
    skyline<<<blocks, BLKDIM>>>(d_P, d_skyline_flags, N, D);
    // Reduction to get r count
-   countReduction<<<blocks, BLKDIM>>>(d_skyline_flags, d_r, N);
+   r_reduction<<<blocks, BLKDIM>>>(d_skyline_flags, d_r, N);
    cudaSafeCall(cudaDeviceSynchronize());
    // Copy data from host
    cudaSafeCall(cudaMemcpy(h_skyline_flags, d_skyline_flags, flag_bytes, cudaMemcpyDeviceToHost));
