@@ -14,6 +14,7 @@
 #include "hpc.h"
 
 #define BLKDIM 256
+#define REDUCTION_BLKDIM 1024
 
 /**
  * Point data structure.
@@ -113,7 +114,7 @@ __global__ void skyline(const float *points_data, char *skyline_flags, const uns
  */
 __global__ void r_reduction(char *skyline_flags, unsigned int *r, const unsigned int N) {
    // Setup shared memory
-   __shared__ unsigned int shmem[BLKDIM];
+   __shared__ unsigned int shmem[REDUCTION_BLKDIM];
    // Thread and global indices
    const unsigned int tid = threadIdx.x;
    const unsigned int gindex = blockIdx.x * blockDim.x + threadIdx.x;
@@ -175,6 +176,7 @@ int main(int argc, char *argv[]) {
    unsigned int *d_r;
    // Calculate blocks
    const unsigned int blocks = (N + BLKDIM - 1) / BLKDIM;
+   const unsigned int reduction_blocks = (N + REDUCTION_BLKDIM - 1) / REDUCTION_BLKDIM;
    // Allocate data on the gpu
    cudaSafeCall(cudaMalloc(&d_P, point_bytes));
    cudaSafeCall(cudaMalloc(&d_skyline_flags, flag_bytes));
@@ -186,7 +188,7 @@ int main(int argc, char *argv[]) {
    const double tstart = hpc_gettime();
    skyline<<<blocks, BLKDIM>>>(d_P, d_skyline_flags, N, D);
    // Reduction to get r count
-   r_reduction<<<blocks, BLKDIM>>>(d_skyline_flags, d_r, N);
+   r_reduction<<<reduction_blocks, REDUCTION_BLKDIM>>>(d_skyline_flags, d_r, N);
    cudaSafeCall(cudaDeviceSynchronize());
    const double elapsed = hpc_gettime() - tstart;
    // Copy data from host
