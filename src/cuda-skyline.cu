@@ -13,7 +13,7 @@
 
 #include "hpc.h"
 
-#define BLKDIM 32
+#define BLKDIM 512
 #define REDUCTION_BLKDIM 512
 
 /**
@@ -94,19 +94,37 @@ __device__ inline char dominates(const float *p, const float *q, const unsigned 
  * Returns the number of skyline points.
  */
 __global__ void skyline(const float *points_data, char *skyline_flags, const unsigned int N, const unsigned int D) {
+   #define SHMEM_FLOATS 12288
+   __shared__ float shmem[SHMEM_FLOATS];
+   const unsigned int tile_size = SHMEM_FLOATS / D;
    const unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-   if (i >= N) return;
    const float *pi = points_data + i * D;
    char in_skyline = 1;
-   for (unsigned int j = 0; j < N; ++j) {
-      if (!skyline_flags[j]) continue;
-      const float *pj = points_data + j * D;
-      if (dominates(pj, pi, D)) {
-         in_skyline = 0;
-         break;
+   // Loop over tiles
+   for (unsigned int tile_start = 0; tile_start < N; tile_start += tile_size) {
+      // Load tile into shared memory
+      const unsigned int curr_tile_size = min(tile_size, N - tile_start);
+      for (unsigned int idx = threadIdx.x; idx < curr_tile_size; idx += blockDim.x) {
+         const unsigned int j = tile_start + idx;
+         if (j < N) {
+            for (unsigned int k = 0; k < D; ++k) {
+               shmem[idx * D + k] = points_data[j * D + k];
+            }
+         }
       }
+      __syncthreads();
+      // Compare with points in the tile
+      for (unsigned int tj = 0; tj < curr_tile_size && i < N; ++tj) {
+         const unsigned int global_j = tile_start + tj;
+         if (!skyline_flags[global_j]) continue;
+         if (dominates(shmem + tj * D, pi, D)) {
+            in_skyline = 0;
+            break;
+         }
+      }
+      __syncthreads();
    }
-   skyline_flags[i] = in_skyline;
+   if (i < N) skyline_flags[i] = in_skyline;
 }
 
 /**
