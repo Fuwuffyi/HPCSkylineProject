@@ -13,7 +13,8 @@
 
 #include "hpc.h"
 
-#define BLKDIM 512
+#define GLOBAL_BLKDIM 32
+#define SHARED_BLKDIM 512
 #define REDUCTION_BLKDIM 512
 
 /**
@@ -212,8 +213,8 @@ int main(int argc, char *argv[]) {
    char *d_skyline_flags;
    unsigned int *d_r;
    // Calculate blocks
-   const unsigned int shared_blocks = (N + BLKDIM - 1) / BLKDIM;
-   const unsigned int global_blocks = (N + 32 - 1) / 32;
+   const unsigned int shared_blocks = (N + SHARED_BLKDIM - 1) / SHARED_BLKDIM;
+   const unsigned int global_blocks = (N + GLOBAL_BLKDIM - 1) / GLOBAL_BLKDIM;
    const unsigned int reduction_blocks = (N + REDUCTION_BLKDIM - 1) / REDUCTION_BLKDIM;
    // Allocate data on the gpu
    cudaSafeCall(cudaMalloc(&d_P, point_bytes));
@@ -225,9 +226,9 @@ int main(int argc, char *argv[]) {
    // Run the skyline algorithm
    const double tstart = hpc_gettime();
    if (D > 1536) {
-      global_skyline<<<global_blocks, 32>>>(d_P, d_skyline_flags, N, D);
+      global_skyline<<<global_blocks, GLOBAL_BLKDIM>>>(d_P, d_skyline_flags, N, D);
    } else {
-      shared_skyline<<<shared_blocks, BLKDIM>>>(d_P, d_skyline_flags, N, D);
+      shared_skyline<<<shared_blocks, SHARED_BLKDIM>>>(d_P, d_skyline_flags, N, D);
    }
    // Reduction to get r count
    r_reduction<<<reduction_blocks, REDUCTION_BLKDIM>>>(d_skyline_flags, d_r, N);
