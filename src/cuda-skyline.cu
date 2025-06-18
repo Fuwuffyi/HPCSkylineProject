@@ -13,7 +13,7 @@
 
 #include "hpc.h"
 
-#define BLKDIM 512
+#define BLKDIM 256
 
 /**
  * Point data structure.
@@ -164,34 +164,34 @@ int main(int argc, char *argv[]) {
    read_input(&points);
    const unsigned int N = points.N;
    const unsigned int D = points.D;
-   const size_t point_bytes = (size_t)N * D * sizeof(float);
-   const size_t flag_bytes = (size_t)N * sizeof(char);
+   const unsigned int point_bytes = N * D * sizeof(float);
+   const unsigned int flag_bytes = N * sizeof(char);
    // Allocate local flags
    char *h_skyline_flags = (char *)malloc(points.N * sizeof(*h_skyline_flags));
    assert(h_skyline_flags);
    unsigned int h_r = 0;
-   // Allocate data on the gpu
    float *d_P;
    char *d_skyline_flags;
    unsigned int *d_r;
+   // Calculate blocks
+   const unsigned int blocks = (N + BLKDIM - 1) / BLKDIM;
+   // Allocate data on the gpu
    cudaSafeCall(cudaMalloc(&d_P, point_bytes));
    cudaSafeCall(cudaMalloc(&d_skyline_flags, flag_bytes));
    cudaSafeCall(cudaMalloc(&d_r, sizeof(unsigned int)));
    cudaSafeCall(cudaMemcpy(d_r, &h_r, sizeof(unsigned int), cudaMemcpyHostToDevice));
    cudaSafeCall(cudaMemcpy(d_P, points.P, point_bytes, cudaMemcpyHostToDevice));
-   // Calculate blocks
-   const unsigned int blocks = (N + BLKDIM - 1) / BLKDIM;
+   cudaSafeCall(cudaMemset(d_skyline_flags, 1, flag_bytes));
    // Run the skyline algorithm
    const double tstart = hpc_gettime();
-   cudaSafeCall(cudaMemset(d_skyline_flags, 1, flag_bytes));
    skyline<<<blocks, BLKDIM>>>(d_P, d_skyline_flags, N, D);
    // Reduction to get r count
    r_reduction<<<blocks, BLKDIM>>>(d_skyline_flags, d_r, N);
    cudaSafeCall(cudaDeviceSynchronize());
+   const double elapsed = hpc_gettime() - tstart;
    // Copy data from host
    cudaSafeCall(cudaMemcpy(h_skyline_flags, d_skyline_flags, flag_bytes, cudaMemcpyDeviceToHost));
    cudaSafeCall(cudaMemcpy(&h_r, d_r, sizeof(unsigned int), cudaMemcpyDeviceToHost));
-   const double elapsed = hpc_gettime() - tstart;
    // Print results
    print_skyline(&points, h_skyline_flags, h_r);
    fprintf(stderr, "\n\t%u points\n", points.N);
