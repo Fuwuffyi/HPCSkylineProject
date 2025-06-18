@@ -13,8 +13,8 @@
 
 #include "hpc.h"
 
-#define BLKDIM 256
-#define REDUCTION_BLKDIM 1024
+#define BLKDIM 32
+#define REDUCTION_BLKDIM 512
 
 /**
  * Point data structure.
