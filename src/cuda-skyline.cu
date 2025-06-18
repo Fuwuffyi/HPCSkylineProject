@@ -89,12 +89,11 @@ __device__ inline char dominates(const float *p, const float *q, const unsigned 
 }
 
 /**
- * Compute the skyline of a set of points.
+ * Compute the skyline of a set of points, using shared memory to locally store points and reduce global memory overhead.
  * Uses an array of skyline_flags (size N) marking whether each point remains in the skyline (1 = in, 0 = out)
- * Returns the number of skyline points.
  */
-__global__ void skyline(const float *points_data, char *skyline_flags, const unsigned int N, const unsigned int D) {
-   #define SHMEM_FLOATS 12288
+__global__ void shared_skyline(const float *points_data, char *skyline_flags, const unsigned int N, const unsigned int D) {
+#define SHMEM_FLOATS 12288
    __shared__ float shmem[SHMEM_FLOATS];
    const unsigned int tile_size = SHMEM_FLOATS / D;
    const unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -125,6 +124,26 @@ __global__ void skyline(const float *points_data, char *skyline_flags, const uns
       __syncthreads();
    }
    if (i < N) skyline_flags[i] = in_skyline;
+}
+
+/**
+ * Compute the skyline of a set of points, using exclusively global memory.
+ * Uses an array of skyline_flags (size N) marking whether each point remains in the skyline (1 = in, 0 = out)
+ */
+__global__ void global_skyline(const float *points_data, char *skyline_flags, const unsigned int N, const unsigned int D) {
+   const unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+   if (i >= N) return;
+   const float *pi = points_data + i * D;
+   char in_skyline = 1;
+   for (unsigned int j = 0; j < N; ++j) {
+      if (!skyline_flags[j]) continue;
+      const float *pj = points_data + j * D;
+      if (dominates(pj, pi, D)) {
+         in_skyline = 0;
+         break;
+      }
+   }
+   skyline_flags[i] = in_skyline;
 }
 
 /**
@@ -193,7 +212,8 @@ int main(int argc, char *argv[]) {
    char *d_skyline_flags;
    unsigned int *d_r;
    // Calculate blocks
-   const unsigned int blocks = (N + BLKDIM - 1) / BLKDIM;
+   const unsigned int shared_blocks = (N + BLKDIM - 1) / BLKDIM;
+   const unsigned int global_blocks = (N + 32 - 1) / 32;
    const unsigned int reduction_blocks = (N + REDUCTION_BLKDIM - 1) / REDUCTION_BLKDIM;
    // Allocate data on the gpu
    cudaSafeCall(cudaMalloc(&d_P, point_bytes));
@@ -204,7 +224,11 @@ int main(int argc, char *argv[]) {
    cudaSafeCall(cudaMemset(d_skyline_flags, 1, flag_bytes));
    // Run the skyline algorithm
    const double tstart = hpc_gettime();
-   skyline<<<blocks, BLKDIM>>>(d_P, d_skyline_flags, N, D);
+   if (D > 1536) {
+      global_skyline<<<global_blocks, 32>>>(d_P, d_skyline_flags, N, D);
+   } else {
+      shared_skyline<<<shared_blocks, BLKDIM>>>(d_P, d_skyline_flags, N, D);
+   }
    // Reduction to get r count
    r_reduction<<<reduction_blocks, REDUCTION_BLKDIM>>>(d_skyline_flags, d_r, N);
    cudaSafeCall(cudaDeviceSynchronize());
