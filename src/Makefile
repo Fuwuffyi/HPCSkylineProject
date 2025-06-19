@@ -32,7 +32,7 @@ endif
 all: serial omp cuda
 
 clean:
-	-$(RM) -f serial-*.o omp-*.o cuda-*.o cuda.exp cuda.lib serial omp cuda serial.exe omp.exe cuda.exe *~
+	-$(RM) -f serial-*.o omp-*.o cuda-*.o cuda-skyline.exp cuda-skyline.lib serial-skyline omp-skyline cuda-skyline serial-skyline.exe omp-skyline.exe cuda-skyline.exe *~
 
 serial: CFLAGS += -fopenmp -DSINGLE_THREAD=1
 serial: $(SERIAL_OBJS)
