@@ -117,6 +117,7 @@ __global__ void shared_skyline(const float *points_data, char *skyline_flags, co
       for (unsigned int tj = 0; tj < curr_tile_size && i < N; ++tj) {
          const unsigned int global_j = tile_start + tj;
          if (!skyline_flags[global_j]) continue;
+         // Check if the other point dominates the current one
          if (dominates(shmem + tj * D, pi, D)) {
             in_skyline = 0;
             break;
@@ -136,9 +137,11 @@ __global__ void global_skyline(const float *points_data, char *skyline_flags, co
    if (i >= N) return;
    const float *pi = points_data + i * D;
    char in_skyline = 1;
+   // Loop over all other tiles in global memory
    for (unsigned int j = 0; j < N; ++j) {
       if (!skyline_flags[j]) continue;
       const float *pj = points_data + j * D;
+      // Check if the other point dominates the current one
       if (dominates(pj, pi, D)) {
          in_skyline = 0;
          break;
@@ -225,7 +228,7 @@ int main(int argc, char *argv[]) {
    cudaSafeCall(cudaMemset(d_skyline_flags, 1, flag_bytes));
    // Run the skyline algorithm
    const double tstart = hpc_gettime();
-   if (D > 1536) {
+   if (D >= 1536) {
       global_skyline<<<global_blocks, GLOBAL_BLKDIM>>>(d_P, d_skyline_flags, N, D);
    } else {
       shared_skyline<<<shared_blocks, SHARED_BLKDIM>>>(d_P, d_skyline_flags, N, D);

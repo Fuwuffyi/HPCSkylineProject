@@ -36,14 +36,14 @@ clean:
 
 serial: CFLAGS += -fopenmp -DSINGLE_THREAD=1
 serial: $(SERIAL_OBJS)
-	$(CC) $(CFLAGS) $(SERIAL_OBJS) -o $@
+	$(CC) $(CFLAGS) $(SERIAL_OBJS) -o serial-skyline
 
 omp: CFLAGS += -fopenmp
 omp: $(OMP_OBJS)
-	$(CC) $(CFLAGS) $(OMP_OBJS) -o $@
+	$(CC) $(CFLAGS) $(OMP_OBJS) -o omp-skyline
 
 cuda: $(CUDA_OBJS)
-	$(NVCC) $(NVCFLAGS) $(CUDA_OBJS) -o $@
+	$(NVCC) $(NVCFLAGS) $(CUDA_OBJS) -o cuda-skyline
 
 serial-%.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@

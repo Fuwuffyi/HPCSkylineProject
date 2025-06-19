@@ -3,9 +3,9 @@
 /src/*.exe
 /src/*.exp
 /src/*.lib
-/src/serial
-/src/omp
-/src/cuda
+/src/serial-skyline
+/src/omp-skyline
+/src/cuda-skyline
 
 # Datasets
 /datasets/*
